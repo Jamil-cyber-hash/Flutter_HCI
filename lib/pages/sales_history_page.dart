@@ -4,24 +4,67 @@ import '../models/sale.dart';
 import 'package:intl/intl.dart';
 
 class SalesHistoryPage extends StatelessWidget {
-  final Box<Sale> saleBox = Hive.box<Sale>('sales');
+  const SalesHistoryPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final Box<Sale> saleBox = Hive.box<Sale>('sales');
+
+    // ✅ Calculate total sales
     double totalSales = saleBox.values.fold(
       0,
       (sum, sale) => sum + (sale.price * sale.quantity),
     );
 
+    // ✅ Daily sales
+    double dailySales = saleBox.values
+        .where((sale) =>
+            DateFormat('yyyy-MM-dd').format(sale.date) ==
+            DateFormat('yyyy-MM-dd').format(DateTime.now()))
+        .fold(0, (sum, sale) => sum + (sale.price * sale.quantity));
+
+    // ✅ Weekly sales
+    DateTime now = DateTime.now();
+    DateTime startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+    double weeklySales = saleBox.values
+        .where((sale) =>
+            sale.date.isAfter(startOfWeek) &&
+            sale.date.isBefore(startOfWeek.add(Duration(days: 7))))
+        .fold(0, (sum, sale) => sum + (sale.price * sale.quantity));
+
+    // ✅ Monthly sales
+    double monthlySales = saleBox.values
+        .where((sale) =>
+            sale.date.year == now.year && sale.date.month == now.month)
+        .fold(0, (sum, sale) => sum + (sale.price * sale.quantity));
+
     return Scaffold(
-      appBar: AppBar(title: Text('Sales History')),
+      appBar: AppBar(title: const Text('Sales History')),
       body: Column(
         children: [
           Padding(
-            padding: EdgeInsets.all(8),
-            child: Text(
-              'Total Sales: ₱${totalSales.toStringAsFixed(2)}',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Total Sales: ₱${totalSales.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Today: ₱${dailySales.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 16),
+                ),
+                Text(
+                  'This Week: ₱${weeklySales.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 16),
+                ),
+                Text(
+                  'This Month: ₱${monthlySales.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -29,7 +72,7 @@ class SalesHistoryPage extends StatelessWidget {
               valueListenable: saleBox.listenable(),
               builder: (context, Box<Sale> box, _) {
                 if (box.isEmpty) {
-                  return Center(child: Text('No sales yet.'));
+                  return const Center(child: Text('No sales yet.'));
                 }
                 return ListView.builder(
                   itemCount: box.length,
@@ -37,10 +80,15 @@ class SalesHistoryPage extends StatelessWidget {
                     final sale = box.getAt(index);
                     return ListTile(
                       title: Text('${sale!.productName} - ₱${sale.price}'),
-                      subtitle: Text(
-                        'Date: ${sale.date != null 
-                          ? DateFormat('yyyy-MM-dd – HH:mm').format(sale.date) 
-                          : 'No Date'}',
+                     subtitle: Text(
+  sale.date != null
+    ? 'Date: ${DateFormat('yyyy-MM-dd – HH:mm').format(sale.date!)}'
+    : 'Date: No Date', // ✅ Fallback value if null
+),
+
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () => _deleteSale(context, index),
                       ),
                     );
                   },
@@ -50,6 +98,15 @@ class SalesHistoryPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _deleteSale(BuildContext context, int index) {
+    final Box<Sale> saleBox = Hive.box<Sale>('sales');
+    saleBox.deleteAt(index);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sale deleted')),
     );
   }
 }

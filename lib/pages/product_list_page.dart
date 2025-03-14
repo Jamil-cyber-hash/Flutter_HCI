@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/product.dart';
-import '../models/sale.dart';
-import 'sales_history_page.dart';
+import 'checkout_page.dart';
 
 class ProductListPage extends StatefulWidget {
   @override
@@ -11,96 +10,118 @@ class ProductListPage extends StatefulWidget {
 
 class _ProductListPageState extends State<ProductListPage> {
   late Box<Product> productBox;
-  late Box<Sale> saleBox;
+  Map<int, int> selectedProducts = {};
 
   @override
   void initState() {
     super.initState();
     productBox = Hive.box<Product>('products');
-    saleBox = Hive.box<Sale>('sales');
   }
 
-  void addProduct(String name, double price, int stock) {
-    final product = Product(name: name, price: price, stock: stock);
-    productBox.add(product);
-    product.save();
+  void updateSelection(int index, int quantity) {
+    setState(() {
+      if (quantity > 0) {
+        selectedProducts[index] = quantity;
+      } else {
+        selectedProducts.remove(index);
+      }
+    });
   }
 
-  void checkoutProduct(int index) {
-    final product = productBox.getAt(index);
-
-    if (product != null && product.stock > 0) {
-      product.stock -= 1;
-      product.save();
-
-      final sale = Sale(
-        productName: product.name,
-        price: product.price,
-        quantity: 1,
-        date: DateTime.now(),
-      );
-
-      saleBox.add(sale);
-      sale.save();
-    }
-  }
-
-  void _showAddProductDialog() {
+  // ✅ Ipakita ang dialog para mag-add/edit og product
+  void _showProductDialog({int? index}) {
     String name = '';
     String price = '';
     String stock = '';
 
+    if (index != null) {
+      final product = productBox.getAt(index);
+      name = product!.name;
+      price = product.price.toString();
+      stock = product.stock.toString();
+    }
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Add Product'),
+        title: Text(index == null ? 'Add Product' : 'Edit Product'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              decoration: InputDecoration(labelText: 'Product Name'),
+              decoration: const InputDecoration(labelText: 'Product Name'),
               onChanged: (value) => name = value,
+              controller: TextEditingController(text: name),
             ),
             TextField(
-              decoration: InputDecoration(labelText: 'Price'),
+              decoration: const InputDecoration(labelText: 'Price'),
               keyboardType: TextInputType.number,
               onChanged: (value) => price = value,
+              controller: TextEditingController(text: price),
             ),
             TextField(
-              decoration: InputDecoration(labelText: 'Stock'),
+              decoration: const InputDecoration(labelText: 'Stock'),
               keyboardType: TextInputType.number,
               onChanged: (value) => stock = value,
+              controller: TextEditingController(text: stock),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () {
               if (name.isNotEmpty &&
                   double.tryParse(price) != null &&
                   int.tryParse(stock) != null) {
-                addProduct(name, double.parse(price), int.parse(stock));
-                Navigator.pop(context);
+                if (index == null) {
+                  productBox.add(
+                    Product(
+                      name: name,
+                      price: double.parse(price),
+                      stock: int.parse(stock),
+                    ),
+                  );
+                } else {
+                  productBox.putAt(
+                    index,
+                    Product(
+                      name: name,
+                      price: double.parse(price),
+                      stock: int.parse(stock),
+                    ),
+                  );
+                }
+                Navigator.of(context).pop();
+                setState(() {});
               }
             },
-            child: Text('Add'),
+            child: Text(index == null ? 'Add' : 'Save'),
           ),
         ],
       ),
     );
   }
 
+  void _deleteProduct(int index) {
+    productBox.deleteAt(index);
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Products')),
+      appBar: AppBar(title: const Text('Motorcycle Accessory Shop')),
       body: ValueListenableBuilder(
         valueListenable: productBox.listenable(),
         builder: (context, Box<Product> box, _) {
           if (box.isEmpty) {
-            return Center(child: Text('No products available'));
+            return const Center(child: Text('No products available'));
           }
+
           return ListView.builder(
             itemCount: box.length,
             itemBuilder: (context, index) {
@@ -108,33 +129,87 @@ class _ProductListPageState extends State<ProductListPage> {
               return ListTile(
                 title: Text('${product!.name} - ₱${product.price}'),
                 subtitle: Text('Stock: ${product.stock}'),
-                trailing: IconButton(
-                  icon: Icon(Icons.shopping_cart),
-                  onPressed: () => checkoutProduct(index),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () => _showProductDialog(index: index),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: () => _deleteProduct(index),
+                    ),
+                  ],
                 ),
+                onTap: () => _showQuantityDialog(index, product),
               );
             },
           );
         },
       ),
       floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
           FloatingActionButton(
-            onPressed: _showAddProductDialog,
-            child: Icon(Icons.add),
-            heroTag: 'addProduct',
-          ),
-          SizedBox(height: 10),
-          FloatingActionButton(
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SalesHistoryPage()),
-              );
+              if (selectedProducts.isNotEmpty) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CheckoutPage(
+                      selectedProducts: selectedProducts,
+                      productBox: productBox,
+                    ),
+                  ),
+                );
+              }
             },
-            child: Icon(Icons.history), // ✅ Sales History Button
-            heroTag: 'salesHistory',
+            child: const Icon(Icons.shopping_cart),
+            heroTag: 'checkoutBtn',
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            onPressed: () => _showProductDialog(),
+            child: const Icon(Icons.add),
+            heroTag: 'addBtn',
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showQuantityDialog(int index, Product product) {
+    int quantity = selectedProducts[index] ?? 0;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Select Quantity'),
+        content: TextField(
+          keyboardType: TextInputType.number,
+          onChanged: (value) {
+            quantity = int.tryParse(value) ?? 0;
+          },
+          controller: TextEditingController(text: quantity.toString()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (quantity > product.stock) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Not enough stock available')),
+                );
+              } else {
+                updateSelection(index, quantity);
+                Navigator.of(context).pop();
+              }
+            },
+            child: const Text('Confirm'),
           ),
         ],
       ),

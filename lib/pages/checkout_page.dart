@@ -2,129 +2,141 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/product.dart';
 import '../models/sale.dart';
-import 'package:intl/intl.dart';
 
 class CheckoutPage extends StatefulWidget {
+  final Map<int, int> selectedProducts;
+  final Box<Product> productBox;
+
+  const CheckoutPage({
+    super.key,
+    required this.selectedProducts,
+    required this.productBox,
+  });
+
   @override
   _CheckoutPageState createState() => _CheckoutPageState();
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  late Box<Product> productBox;
-  late Box<Sale> saleBox;
-  double total = 0;
+  double totalPrice = 0;
 
   @override
   void initState() {
     super.initState();
-    productBox = Hive.box<Product>('products');
-    saleBox = Hive.box<Sale>('sales');
     calculateTotal();
   }
 
   void calculateTotal() {
-    total = 0;
-    for (int i = 0; i < productBox.length; i++) {
-      final product = productBox.getAt(i);
-      if (product != null) {
-        total += product.price * product.stock;
-      }
-    }
-    setState(() {});
-  }
-
-  void adjustQuantity(int index, int change) {
-    final product = productBox.getAt(index);
-    if (product != null) {
-      if (change > 0) {
-        if (product.stock > 0) {
-          product.stock -= 1;
-          product.save();
+    setState(() {
+      totalPrice = widget.selectedProducts.entries.fold(0, (sum, entry) {
+        final product = widget.productBox.getAt(entry.key);
+        if (product != null) {
+          return sum + (product.price * entry.value);
         }
-      } else if (change < 0) {
-        product.stock += 1;
-        product.save();
-      }
-    }
-    calculateTotal();
+        return sum;
+      });
+    });
   }
 
-  void confirmCheckout() {
-    for (int i = 0; i < productBox.length; i++) {
-      final product = productBox.getAt(i);
-      if (product != null && product.stock > 0) {
-        final sale = Sale(
-          productName: product.name,
-          price: product.price,
-          quantity: 1,
-          date: DateTime.now(),
+ // ✅ Function for checkout
+void completeCheckout() {
+  final saleBox = Hive.box<Sale>('sales');
+
+  widget.selectedProducts.forEach((key, quantity) {
+    final product = widget.productBox.getAt(key);
+
+    if (product != null) {
+      if (product.stock >= quantity) {
+        // ✅ Reduce stock
+        widget.productBox.putAt(
+          key,
+          Product(
+            name: product.name,
+            price: product.price,
+            stock: product.stock - quantity,
+          ),
         );
-        saleBox.add(sale);
-        sale.save();
+
+        // ✅ Record sale
+        saleBox.add(
+          Sale(
+            productName: product.name,
+            price: product.price,
+            quantity: quantity,
+            date: DateTime.now(),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Not enough stock for ${product.name}')),
+        );
+        return; // Exit if stock is insufficient
       }
     }
+  });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Checkout Successful!')),
-    );
+  // ✅ Clear cart and refresh total
+  widget.selectedProducts.clear();
+  calculateTotal();
 
-    calculateTotal();
-    Navigator.pop(context);
-  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Checkout successful!')),
+  );
+
+  Navigator.of(context).pop(); // ✅ Close checkout page
+}
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Checkout')),
-      body: ValueListenableBuilder(
-        valueListenable: productBox.listenable(),
-        builder: (context, Box<Product> box, _) {
-          if (box.isEmpty) {
-            return Center(child: Text('No products available for checkout'));
-          }
+      appBar: AppBar(title: const Text('Checkout')),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: widget.selectedProducts.length,
+              itemBuilder: (context, index) {
+                final key = widget.selectedProducts.keys.elementAt(index);
+                final product = widget.productBox.getAt(key);
 
-          return ListView.builder(
-            itemCount: box.length,
-            itemBuilder: (context, index) {
-              final product = box.getAt(index);
-              return ListTile(
-                title: Text('${product!.name} - ₱${product.price}'),
-                subtitle: Text('Stock: ${product.stock}'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.remove),
-                      onPressed: () => adjustQuantity(index, -1),
-                    ),
-                    Text('${product.stock}'),
-                    IconButton(
-                      icon: Icon(Icons.add),
-                      onPressed: () => adjustQuantity(index, 1),
-                    ),
-                  ],
+                if (product == null) return const SizedBox();
+
+                return ListTile(
+                  title: Text('${product.name} - ₱${product.price}'),
+                  subtitle: Text('Quantity: ${widget.selectedProducts[key]}'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () {
+                      setState(() {
+                        widget.selectedProducts.remove(key);
+                        calculateTotal();
+                      });
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Text(
+                  'Total: ₱${totalPrice.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-              );
-            },
-          );
-        },
-      ),
-      bottomNavigationBar: Container(
-        padding: EdgeInsets.all(10),
-        color: Colors.grey[200],
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Total: ₱${total.toStringAsFixed(2)}',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: widget.selectedProducts.isEmpty
+                      ? null
+                      : completeCheckout,
+                  child: const Text('Complete Checkout'),
+                ),
+              ],
             ),
-            ElevatedButton(
-              onPressed: total > 0 ? confirmCheckout : null,
-              child: Text('Confirm Checkout'),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
