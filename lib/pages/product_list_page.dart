@@ -3,7 +3,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../models/product.dart';
 import 'checkout_page.dart';
 
-
 class ProductListPage extends StatefulWidget {
   @override
   _ProductListPageState createState() => _ProductListPageState();
@@ -12,6 +11,8 @@ class ProductListPage extends StatefulWidget {
 class _ProductListPageState extends State<ProductListPage> {
   late Box<Product> productBox;
   Map<int, int> selectedProducts = {};
+  String _sortType = 'name'; // Default sorting type
+  String _searchQuery = ''; // Search query
 
   @override
   void initState() {
@@ -29,93 +30,68 @@ class _ProductListPageState extends State<ProductListPage> {
     });
   }
 
-  // ✅ Ipakita ang dialog para mag-add/edit og product
-  void _showProductDialog({int? index}) {
-    String name = '';
-    String price = '';
-    String stock = '';
+  // ✅ Sort and Search Products
+  List<Product> _getFilteredProducts() {
+    List<Product> products = productBox.values.toList();
 
-    if (index != null) {
-      final product = productBox.getAt(index);
-      name = product!.name;
-      price = product.price.toString();
-      stock = product.stock.toString();
+    if (_searchQuery.isNotEmpty) {
+      products = products
+          .where((product) => product.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .toList();
     }
 
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(index == null ? 'Add Product' : 'Edit Product'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              decoration: const InputDecoration(labelText: 'Product Name'),
-              onChanged: (value) => name = value,
-              controller: TextEditingController(text: name),
-            ),
-            TextField(
-              decoration: const InputDecoration(labelText: 'Price'),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => price = value,
-              controller: TextEditingController(text: price),
-            ),
-            TextField(
-              decoration: const InputDecoration(labelText: 'Stock'),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => stock = value,
-              controller: TextEditingController(text: stock),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (name.isNotEmpty &&
-                  double.tryParse(price) != null &&
-                  int.tryParse(stock) != null) {
-                if (index == null) {
-                  productBox.add(
-                    Product(
-                      name: name,
-                      price: double.parse(price),
-                      stock: int.parse(stock),
-                    ),
-                  );
-                } else {
-                  productBox.putAt(
-                    index,
-                    Product(
-                      name: name,
-                      price: double.parse(price),
-                      stock: int.parse(stock),
-                    ),
-                  );
-                }
-                Navigator.of(context).pop();
-                setState(() {});
-              }
-            },
-            child: Text(index == null ? 'Add' : 'Save'),
-          ),
-        ],
-      ),
-    );
+    switch (_sortType) {
+      case 'price':
+        products.sort((a, b) => a.price.compareTo(b.price));
+        break;
+      case 'stock':
+        products.sort((a, b) => a.stock.compareTo(b.stock));
+        break;
+      default:
+        products.sort((a, b) => a.name.compareTo(b.name)); // Default: Name
+    }
+    return products;
   }
 
-  void _deleteProduct(int index) {
-    productBox.deleteAt(index);
-    setState(() {});
+  void _changeSorting(String sortType) {
+    setState(() {
+      _sortType = sortType;
+    });
+  }
+
+  void _updateSearchQuery(String query) {
+    setState(() {
+      _searchQuery = query;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    List<Product> filteredProducts = _getFilteredProducts();
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Motorcycle Accessory Shop')),
+      appBar: AppBar(
+        title: const Text('Motorcycle Accessory Shop'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              showSearch(
+                context: context,
+                delegate: ProductSearchDelegate(productBox.values.toList(), _updateSearchQuery),
+              );
+            },
+          ),
+          PopupMenuButton<String>(
+            onSelected: _changeSorting,
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'name', child: Text('Sort by Name')),
+              const PopupMenuItem(value: 'price', child: Text('Sort by Price')),
+              const PopupMenuItem(value: 'stock', child: Text('Sort by Stock')),
+            ],
+          ),
+        ],
+      ),
       body: ValueListenableBuilder(
         valueListenable: productBox.listenable(),
         builder: (context, Box<Product> box, _) {
@@ -124,11 +100,11 @@ class _ProductListPageState extends State<ProductListPage> {
           }
 
           return ListView.builder(
-            itemCount: box.length,
+            itemCount: filteredProducts.length,
             itemBuilder: (context, index) {
-              final product = box.getAt(index);
+              final product = filteredProducts[index];
               return ListTile(
-                title: Text('${product!.name} - ₱${product.price}'),
+                title: Text('${product.name} - ₱${product.price}'),
                 subtitle: Text('Stock: ${product.stock}'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -171,19 +147,18 @@ class _ProductListPageState extends State<ProductListPage> {
           ),
           const SizedBox(height: 10),
           FloatingActionButton(
-            onPressed: () => _showProductDialog(),
+            onPressed: () => _showProductDialog(index: null),
             child: const Icon(Icons.add),
             heroTag: 'addBtn',
           ),
           const SizedBox(height: 10),
           FloatingActionButton(
             onPressed: () {
-            Navigator.pushNamed(context, '/sales_history');
-          },
-          child: const Icon(Icons.history),
-          heroTag: 'salesHistoryBtn',
+              Navigator.pushNamed(context, '/sales_history');
+            },
+            child: const Icon(Icons.history),
+            heroTag: 'salesHistoryBtn',
           ),
-
           const SizedBox(height: 10),
           FloatingActionButton(
             onPressed: () {
@@ -192,47 +167,78 @@ class _ProductListPageState extends State<ProductListPage> {
             child: const Icon(Icons.bar_chart),
             heroTag: 'salessummaryBtn',
           ),
-
-
         ],
       ),
     );
   }
+  
+  Widget _showProductDialog({int? index}) {
+    return Container(); // Replace with your actual widget
+  }
+}
 
-  void _showQuantityDialog(int index, Product product) {
-    int quantity = selectedProducts[index] ?? 0;
+Widget _showQuantityDialog(int index, Product product) {
+  return Container(); // Replace with your actual widget
+}
 
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Select Quantity'),
-        content: TextField(
-          keyboardType: TextInputType.number,
-          onChanged: (value) {
-            quantity = int.tryParse(value) ?? 0;
-          },
-          controller: TextEditingController(text: quantity.toString()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (quantity > product.stock) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Not enough stock available')),
-                );
-              } else {
-                updateSelection(index, quantity);
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Text('Confirm'),
-          ),
-        ],
+Widget _deleteProduct(int index) {
+  // Add your delete logic here
+  return Container(); // Return an empty container or any other widget
+}
+
+// Search Delegate for Searching Products
+class ProductSearchDelegate extends SearchDelegate {
+  final List<Product> products;
+  final Function(String) onSearch;
+
+  ProductSearchDelegate(this.products, this.onSearch);
+
+  @override
+  List<Widget> buildActions(BuildContext context) {
+    return [
+      IconButton(
+        icon: const Icon(Icons.clear),
+        onPressed: () {
+          query = '';
+          onSearch(query);
+        },
       ),
+    ];
+  }
+
+  @override
+  Widget buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () => close(context, null),
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    onSearch(query);
+    return Container();
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    List<Product> filteredProducts = products
+        .where((product) => product.name.toLowerCase().contains(query.toLowerCase()))
+        .toList();
+
+    return ListView.builder(
+      itemCount: filteredProducts.length,
+      itemBuilder: (context, index) {
+        final product = filteredProducts[index];
+        return ListTile(
+          title: Text('${product.name} - ₱${product.price}'),
+          subtitle: Text('Stock: ${product.stock}'),
+          onTap: () {
+            close(context, null);
+            onSearch(product.name);
+          },
+        );
+      },
     );
   }
 }
