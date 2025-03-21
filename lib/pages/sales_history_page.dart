@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/sale.dart';
 import 'package:intl/intl.dart';
+import 'daily_sales_page.dart';
 
 class SalesHistoryPage extends StatelessWidget {
   const SalesHistoryPage({super.key});
@@ -64,6 +65,18 @@ class SalesHistoryPage extends StatelessWidget {
                   'This Month: ₱${monthlySales.toStringAsFixed(2)}',
                   style: const TextStyle(fontSize: 16),
                 ),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => DailySalesPage(
+                              saleBox: Hive.box<Sale>('sales'))),
+                    );
+                  },
+                  child: const Text('View Today\'s Sales'),
+                ),
               ],
             ),
           ),
@@ -80,12 +93,11 @@ class SalesHistoryPage extends StatelessWidget {
                     final sale = box.getAt(index);
                     return ListTile(
                       title: Text('${sale!.productName} - ₱${sale.price}'),
-                     subtitle: Text(
-  sale.date != null
-    ? 'Date: ${DateFormat('yyyy-MM-dd – HH:mm').format(sale.date!)}'
-    : 'Date: No Date', // ✅ Fallback value if null
-),
-
+                      subtitle: Text(
+                        sale.date != null
+                            ? 'Date: ${DateFormat('yyyy-MM-dd – HH:mm').format(sale.date!)}'
+                            : 'Date: No Date',
+                      ),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete),
                         onPressed: () => _deleteSale(context, index),

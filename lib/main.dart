@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:moto_casher/models/sale.dart';
+import 'package:moto_casher/pages/sales_history_page.dart';
+import 'package:moto_casher/pages/sales_summary_page.dart';
 import 'models/product.dart';
 import 'pages/product_list_page.dart';
 
@@ -11,7 +13,7 @@ void main() async {
   Hive.registerAdapter(ProductAdapter());
    Hive.registerAdapter(SaleAdapter());
   await Hive.openBox<Product>('products');
-   await Hive.deleteBoxFromDisk('sales');
+  //  await Hive.deleteBoxFromDisk('sales');
  await Hive.openBox<Sale>('sales');
 
   runApp(MyApp());
@@ -23,6 +25,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: ProductListPage(),
+      routes: {
+    '/sales_history': (context) => const SalesHistoryPage(),
+     '/sales_summary': (context) => const SalesSummaryPage(),
+  },
     );
   }
 }

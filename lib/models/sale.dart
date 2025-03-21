@@ -5,16 +5,16 @@ part 'sale.g.dart';
 @HiveType(typeId: 1)
 class Sale extends HiveObject {
   @HiveField(0)
-  String productName;
+  final String productName;
 
   @HiveField(1)
-  double price;
+  final double price;
 
   @HiveField(2)
-  int quantity;
+  final int quantity;
 
   @HiveField(3)
-  DateTime date;
+  final DateTime date;
 
   Sale({
     required this.productName,

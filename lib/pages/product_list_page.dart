@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../models/product.dart';
 import 'checkout_page.dart';
 
+
 class ProductListPage extends StatefulWidget {
   @override
   _ProductListPageState createState() => _ProductListPageState();
@@ -174,6 +175,25 @@ class _ProductListPageState extends State<ProductListPage> {
             child: const Icon(Icons.add),
             heroTag: 'addBtn',
           ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            onPressed: () {
+            Navigator.pushNamed(context, '/sales_history');
+          },
+          child: const Icon(Icons.history),
+          heroTag: 'salesHistoryBtn',
+          ),
+
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            onPressed: () {
+              Navigator.pushNamed(context, '/sales_summary');
+            },
+            child: const Icon(Icons.bar_chart),
+            heroTag: 'salessummaryBtn',
+          ),
+
+
         ],
       ),
     );
