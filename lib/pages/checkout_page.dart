@@ -19,6 +19,7 @@ class CheckoutPage extends StatefulWidget {
 
 class _CheckoutPageState extends State<CheckoutPage> {
   double totalPrice = 0;
+  TextEditingController paymentController = TextEditingController();
 
   @override
   void initState() {
@@ -38,54 +39,53 @@ class _CheckoutPageState extends State<CheckoutPage> {
     });
   }
 
- // ✅ Function for checkout
-void completeCheckout() {
-  final saleBox = Hive.box<Sale>('sales');
+  void completeCheckout() {
+    final saleBox = Hive.box<Sale>('sales');
+    double paymentAmount = double.tryParse(paymentController.text) ?? 0;
 
-  widget.selectedProducts.forEach((key, quantity) {
-    final product = widget.productBox.getAt(key);
+    if (paymentAmount < totalPrice) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Insufficient payment amount')),
+      );
+      return;
+    }
 
-    if (product != null) {
-      if (product.stock >= quantity) {
-        // ✅ Reduce stock
+    double change = paymentAmount - totalPrice;
+
+    widget.selectedProducts.forEach((key, quantity) {
+      final product = widget.productBox.getAt(key);
+      if (product != null && product.stock >= quantity) {
         widget.productBox.putAt(
           key,
           Product(
             name: product.name,
             price: product.price,
             stock: product.stock - quantity,
+            category: product.category,
           ),
         );
 
-        // ✅ Record sale
         saleBox.add(
           Sale(
             productName: product.name,
             price: product.price,
             quantity: quantity,
+            totalAmount: product.price * quantity,
             date: DateTime.now(),
           ),
         );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Not enough stock for ${product.name}')),
-        );
-        return; // Exit if stock is insufficient
       }
-    }
-  });
+    });
 
-  // ✅ Clear cart and refresh total
-  widget.selectedProducts.clear();
-  calculateTotal();
+    widget.selectedProducts.clear();
+    calculateTotal();
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Checkout successful!')),
-  );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Checkout successful! Change: ₱${change.toStringAsFixed(2)}')),
+    );
 
-  Navigator.of(context).pop(); // ✅ Close checkout page
-}
-
+    Navigator.of(context).pop();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +99,6 @@ void completeCheckout() {
               itemBuilder: (context, index) {
                 final key = widget.selectedProducts.keys.elementAt(index);
                 final product = widget.productBox.getAt(key);
-
                 if (product == null) return const SizedBox();
 
                 return ListTile(
@@ -126,11 +125,14 @@ void completeCheckout() {
                   'Total: ₱${totalPrice.toStringAsFixed(2)}',
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
+                TextField(
+                  controller: paymentController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Enter amount paid'),
+                ),
                 const SizedBox(height: 10),
                 ElevatedButton(
-                  onPressed: widget.selectedProducts.isEmpty
-                      ? null
-                      : completeCheckout,
+                  onPressed: widget.selectedProducts.isEmpty ? null : completeCheckout,
                   child: const Text('Complete Checkout'),
                 ),
               ],

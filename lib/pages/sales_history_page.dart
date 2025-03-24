@@ -95,7 +95,7 @@ class SalesHistoryPage extends StatelessWidget {
                       title: Text('${sale!.productName} - ₱${sale.price}'),
                       subtitle: Text(
                         sale.date != null
-                            ? 'Date: ${DateFormat('yyyy-MM-dd – HH:mm').format(sale.date!)}'
+                            ? 'Date: ${DateFormat('yyyy-MM-dd – HH:mm').format(sale.date)}'
                             : 'Date: No Date',
                       ),
                       trailing: IconButton(

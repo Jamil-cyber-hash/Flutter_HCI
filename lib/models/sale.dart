@@ -22,4 +22,6 @@ class Sale extends HiveObject {
     required this.quantity,
     required this.date,
   });
+
+  num? get totalAmount => null;
 }
